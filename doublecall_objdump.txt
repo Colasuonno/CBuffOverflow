@@ -1,5 +1,5 @@
 
-./doublecall:     file format elf64-x86-64
+doublecall:     file format elf64-x86-64
 
 
 Disassembly of section .init:
@@ -36,10 +36,10 @@ Disassembly of section .text:
 0000000000401050 <main>:
   401050:	48 83 ec 08          	sub    $0x8,%rsp
   401054:	48 8d 3d a9 0f 00 00 	lea    0xfa9(%rip),%rdi        # 402004 <_IO_stdin_used+0x4>
-  40105b:	e8 d0 ff ff ff       	call   401030 <puts@plt>   # printf("INIT....")
+  40105b:	e8 d0 ff ff ff       	call   401030 <puts@plt>
   401060:	e8 0b 01 00 00       	call   401170 <doubleCall>
   401065:	48 8d 3d a5 0f 00 00 	lea    0xfa5(%rip),%rdi        # 402011 <_IO_stdin_used+0x11>
-  40106c:	e8 bf ff ff ff       	call   401030 <puts@plt>    # printf("END.....")
+  40106c:	e8 bf ff ff ff       	call   401030 <puts@plt>
   401071:	31 c0                	xor    %eax,%eax
   401073:	48 83 c4 08          	add    $0x8,%rsp
   401077:	c3                   	ret
@@ -119,13 +119,14 @@ Disassembly of section .text:
 0000000000401170 <doubleCall>:
   401170:	53                   	push   %rbx
   401171:	48 83 ec 10          	sub    $0x10,%rsp
-  401175:	48 8d 7c 24 08       	lea    0x8(%rsp),%rdi
-  40117a:	e8 c1 fe ff ff       	call   401040 <gets@plt>
-  40117f:	48 8d 7c 24 08       	lea    0x8(%rsp),%rdi
-  401184:	e8 a7 fe ff ff       	call   401030 <puts@plt>
-  401189:	48 83 c4 10          	add    $0x10,%rsp
-  40118d:	5b                   	pop    %rbx
-  40118e:	c3                   	ret
+  401175:	48 8d 5c 24 08       	lea    0x8(%rsp),%rbx
+  40117a:	48 89 df             	mov    %rbx,%rdi
+  40117d:	e8 be fe ff ff       	call   401040 <gets@plt>
+  401182:	48 89 df             	mov    %rbx,%rdi
+  401185:	e8 a6 fe ff ff       	call   401030 <puts@plt>
+  40118a:	48 83 c4 10          	add    $0x10,%rsp
+  40118e:	5b                   	pop    %rbx
+  40118f:	c3                   	ret
 
 Disassembly of section .fini:
 
