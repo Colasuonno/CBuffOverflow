@@ -75,15 +75,15 @@ Executing the program with the input `AAAABBBBCCCCDDDDEEEEFFFF`, will result in 
 
 ![doublecall 1](docs/images/doublecall%201.jpeg)
 
-Continuing the execution will result in: `Segmentation fault at address 0x46464646`
-That value corresponds to the characters 'FFFF' in ASCII (0x46 = 'F'), meaning the return address was overwritten with 'F's.
+Continuing the execution will result in: `Segmentation fault at address 0x46464646`\
+That value corresponds to the characters 'FFFF' in ASCII (0x46 = 'F'), meaning the return address was overwritten with 'F's.\
 **Bingo!** We now know that placing an address immediately after the 'EEEE' block will overwrite the return address.
 
 Assuming the address of `doubleCall` from the disassembly is `0x080491c0`, we need to place it at the right position in little-endian format.
 
 ![doublecall 2](docs/images/doublecall%202.jpeg)
 
-We can craft the payload like this: `perl -e 'print pack("H*", "4141414141414141414141414141414141414141c0910408");'`
+We can craft the payload like this: `perl -e 'print pack("H*", "4141414141414141414141414141414141414141c0910408");'`\
 As shown in the image below, the payload correctly overwrites the return address with the address of `doubleCall` (in little-endian).
 
 ![doublecall 3](docs/images/doublecall%203.jpeg)
