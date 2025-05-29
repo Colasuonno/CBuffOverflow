@@ -6,10 +6,11 @@ CFLAGS = -Wall -Wextra -O2 -std=c99 -fno-stack-protector -m32 -no-pie -z execsta
 SRC := $(wildcard *.c) $(wildcard */*.c)
 TARGETS := $(SRC:.c=)
 
-all: $(TARGETS)
+all: $(SRC)
+	$(foreach f, $(SRC), $(CC) $(CFLAGS) -o $(patsubst src/%.c, bin/%, $(f)) $(f);)
 
-%: %.c
-	$(CC) $(CFLAGS) -o $@ $<
+%: src/%.c
+	$(CC) $(CFLAGS) -o bin/$@ $<
 
 clean:
 	rm -f $(TARGETS)

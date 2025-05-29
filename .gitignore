@@ -1,5 +1,6 @@
 .vscode/
+.idea
 *.o
 
 # Compiled file name
-notchecked
+bin/*
