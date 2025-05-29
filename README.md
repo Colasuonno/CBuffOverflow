@@ -28,83 +28,69 @@ Makefile CFLAG are ```-std=c99``` (Standard C 99) since it allows gets (unsafe f
 
 
 # Not checked (1)
+Before diving into more complex examples of buffer overflow attacks, let’s begin with a brief introduction using the vulnerable program `not-checked`.
+In simple terms, buffer overflow vulnerabilities occur when a program stores unchecked input into a buffer using memory-unsafe functions such as `gets` or `strcpy`.
+These functions do not verify whether the input fits within the allocated space of the destination buffer.
+As a result, if the input exceeds the buffer size, an overflow occurs: instead of raising an error, these functions overwrite adjacent memory locations, potentially leading to unintended or malicious behavior.
 
-Simple not-checked echo program, which can be exploited with sample input
+After compiling `notchecked.c` and generating the executable in the `bin/` folder, we can use GDB to analyze what happens during execution.
 
-```bash
-➜  CBuffOverflow ✗ ./notchecked  hello     
-Echo hello
-```
+First, let’s provide a safe input like AAAA, which fits entirely within the buffer.
+The image below shows the contents of the stack immediately after the execution of `strcpy`.
 
+![notchecked 3](docs/images/notchecked%203.jpeg)
 
-## Exploited:
+- The green square highlights the portion of the stack where our buffer is stored. As expected, it is partially filled with 'A' characters.
 
+- The grey square represents the space between the buffer and the saved base pointer ($ebp), shown in orange.
 
+- Finally, located precisely at $ebp+4 is the return address of the main function.
 
-```bash
-➜  CBuffOverflow ✗ ./notchecked  hellohello
-Echo hellohello
-*** stack smashing detected ***: terminated
-[1]    10916 IOT instruction (core dumped)  ./notchecked hellohello
+By performing a simple calculation, we can determine that an input of at least 40 bytes is required to overwrite the return address.
+Let’s use Python to generate such an input and feed it to notchecked to observe the result.
 
+![notchecked 2](docs/images/notchecked%202.jpeg)
 
-```
+As shown, both the return address and the saved base pointer have been overwritten!
+
+![notchecked 1](docs/images/notchecked%201.jpeg)
+
+As an inevitable consequence, the program crashes. However, this kind of vulnerability can be exploited for far more powerful attacks as we'll see.
+
 
 # Double call (2)
 
-The idea behind this script is to call 2 times a function evicting the second part (in the first input call)
+Having covered the basics of buffer overflow attacks and why they occur, let’s now explore how this vulnerability can allow an attacker to alter the flow of a program.
 
-```c
-int main(void) {
-  printf("Init Program\n");
-  doubleCall();
-  printf("End Program\n");
+To demonstrate this, we’ve created a simple C program called `doublecall`, which contains a vulnerable function of the same name.
+The goal of this basic attack is to redirect the program's execution by forcing it to call the vulnerable function twice.
+We aim to find an input size that overwrites the return address of the `doubleCall` stack frame, and then replace it — instead of pointing back to `main()`, we’ll set it to the address of `doubleCall` itself.
 
-  return 0;
-}
-```
+Start the program and provide increasingly large inputs until it crashes due to a corrupted return address.
+With an input of `24 bytes`, we encounter a segmentation fault.
+However, the hexdump shows only 'A's — we still don’t know exactly where the return address is located in our input.
+Since the program runs on a **32-bit machine**, each address is **4 bytes long**.
+We can craft a distinguishable 24-byte input to identify the return address position.
+Executing the program with the input `AAAABBBBCCCCDDDDEEEEFFFF`, will result in the following stack memory dump:
 
-So after the doubleCall func we will get again "Init Program".
+![doublecall 1](docs/images/doublecall%201.jpeg)
 
-Since I'm using 64 bit architecture the Stack frame pointer is 8 byte.
+Continuing the execution will result in: `Segmentation fault at address 0x46464646`
+That value corresponds to the characters 'FFFF' in ASCII (0x46 = 'F'), meaning the return address was overwritten with 'F's.
+**Bingo!** We now know that placing an address immediately after the 'EEEE' block will overwrite the return address.
 
-## Exploited
+Assuming the address of `doubleCall` from the disassembly is `0x080491c0`, we need to place it at the right position in little-endian format.
 
-In order to exploit this code we need to objdump the script, in the file doublecall_objdump.txt you will find the entire objdump of the script
+![doublecall 2](docs/images/doublecall%202.jpeg)
 
-```
-0000000000401050 <main>:
-  401050:	48 83 ec 08          	sub    $0x8,%rsp
-  401054:	48 8d 3d a9 0f 00 00 	lea    0xfa9(%rip),%rdi        # 402004 <_IO_stdin_used+0x4>
-  40105b:	e8 d0 ff ff ff       	call   401030 <puts@plt>   # printf("INIT....")
-  401060:	e8 0b 01 00 00       	call   401170 <doubleCall>
-  401065:	48 8d 3d a5 0f 00 00 	lea    0xfa5(%rip),%rdi        # 402011 <_IO_stdin_used+0x11>
-  40106c:	e8 bf ff ff ff       	call   401030 <puts@plt>    # printf("END.....")
-  401071:	31 c0                	xor    %eax,%eax
-  401073:	48 83 c4 08          	add    $0x8,%rsp
-  401077:	c3                   	ret
-  401078:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
-  40107f:	00 
-```
+We can craft the payload like this: `perl -e 'print pack("H*", "4141414141414141414141414141414141414141c0910408");'`
+As shown in the image below, the payload correctly overwrites the return address with the address of `doubleCall` (in little-endian).
 
-As you can see the main function (Init) is located @ ```0000000000401050```
+![doublecall 3](docs/images/doublecall%203.jpeg)
 
-to exploit this program we need to fill the entire buffer (8 byte) + fill the stack frame pointer (8 byte) then inject the address we want to execute 
+As a result, the function is executed again, proving that we successfully hijacked the control flow.
 
-```bash
-perl -e 'print "A"x16 . "\x50\x10\x40\x00\x00\x00\x00\x00"' | ./doublecall
-Init Program
-AAAAAAAAAAAAAAAAP@
-Init Program
-
-End Program
-zsh: done                              perl -e 'print "A"x16 . "\x50\x10\x40\x00\x00\x00\x00\x00"' | 
-zsh: segmentation fault (core dumped)  ./doublecall
-```
-
----
-
-Ax16 (8 byte buff + 8 byte stack frame pointer) + main address to re-execute the code
+![doublecall 4](docs/images/doublecall%204.jpeg)
 
 
 
