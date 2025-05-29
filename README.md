@@ -44,10 +44,10 @@ The image below shows the contents of the stack immediately after the execution 
 
 - The grey square represents the space between the buffer and the saved base pointer ($ebp), shown in orange.
 
-- Finally, located precisely at $ebp+4 is the return address of the main function.
+- Finally, in the red box there is the return address of the main function.
 
 By performing a simple calculation, we can determine that an input of at least 40 bytes is required to overwrite the return address.
-Let’s use Python to generate such an input and feed it to notchecked to observe the result.
+Let’s use Python to generate such an input and feed it to `notchecked` to observe the result.
 
 ![notchecked 2](docs/images/notchecked%202.jpeg)
 
