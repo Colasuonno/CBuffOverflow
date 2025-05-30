@@ -107,14 +107,14 @@ To quickly generate this payload, we can use the GDB plugin **pwndbg**, which pr
 Once inside the GDB shell with `pwndbg` installed, type: `cyclic -n 4 500 ./docs/code_exec/discovery_payload.txt`.\
 Now redirect the payload into the `stdin` of the program and observe what happens:
 
-### Image 
+![codeexec 1](docs/images/codeexec%201.png)
 
 As expected, our input has filled the buffer completely **without crashing** the program.\
 Let’s try again with a payload of size **752**.
 
-### Image
+![codeexec 2](docs/images/codeexec%202.png)\
 The following hexdump shows the stack contents immediately after the `strcpy`.\
-### Image
+![codeexec 3](docs/images/codeexec%203.png)\
 
 This time, we’ve overflowed the buffer and caused the program to crash.\
 Looking at the segfault error, we see that the return address has been overwritten with the value: `0x66616162`.\
