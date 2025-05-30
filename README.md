@@ -92,6 +92,56 @@ As a result, the function is executed again, proving that we successfully hijack
 
 ![doublecall 4](docs/images/doublecall%204.jpeg)
 
+# Code Exec (3)
+
+Let's start with something interesting: in this example, we will attempt an attack that aims to force code execution on the target machine  
+through the vulnerable program `codeexec`!  
+We will proceed step by step, assuming you have assimilated the concepts from the previous two examples.
+
+### (1) Reach the return address value!
+
+As you can see from the source code, `codeexec` has a vulnerable buffer of size **500**.  
+To easily determine the return address offset, we can start with a **discovery payload** of the same size.
+
+To quickly generate this payload, we can use the GDB plugin **pwndbg**, which provides many functions specifically crafted for reverse engineering.  
+Once inside the GDB shell with `pwndbg` installed, type: `cyclic -n 4 500 ./docs/code_exec/discovery_payload.txt`.\
+Now redirect the payload into the `stdin` of the program and observe what happens:
+
+### Image 
+
+As expected, our input has filled the buffer completely **without crashing** the program.\
+Let’s try again with a payload of size **752**.
+
+### Image
+The following hexdump shows the stack contents immediately after the `strcpy`.\
+### Image
+
+This time, we’ve overflowed the buffer and caused the program to crash.\
+Looking at the segfault error, we see that the return address has been overwritten with the value: `0x66616162`.\
+Now you might wonder: _"What do we do with this?"_\
+Fortunately, `cyclic` allows us to determine the exact offset of the overwritten value:\
+by running `cyclic -o 0x66616162`, we discover that the return address is reached at offset **504**.
+
+To confirm this, let’s run the program with: `python3 -c 'print("A"*504 + "BBBB")' | ./codeexec`.\
+The program now crashes with the return address value: `0x42424242  # which corresponds to 'BBBB'`
+Success — we’ve confirmed the offset!
+
+### (2) Crafting the payload
+
+Before proceeding, let’s quickly review the typical components of a buffer overflow payload:
+
+1. The **shellcode**\
+a small piece of code used to exploit the program, usually to spawn a shell.
+2. The **nop sled**\
+a long sequence of NOP (no operation) instructions placed before the shellcode.
+It increases the chances of a successful jump by allowing the return address to land anywhere within the sled.
+3. The **return address**\
+this overwrites the original return address.
+It should point somewhere inside the NOP sled, to ensure the CPU will eventually reach the shellcode.
+
+
+
+
 
 
 

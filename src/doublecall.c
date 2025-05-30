@@ -3,7 +3,6 @@
 
 void doubleCall(void) {
   char buf[8];
-
   gets(buf);
   printf("%s\n", buf);
 }
