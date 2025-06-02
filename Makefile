@@ -1,7 +1,7 @@
 # Makefile
 
 CC = gcc
-CFLAGS = -Wall -Wextra -g -O0 -std=c99 -fno-stack-protector -m32 -no-pie -z execstack
+CFLAGS = -Wall -Wextra -g -O0 -std=c99 -fno-stack-protector -no-pie -z execstack -m32
 
 SRC := $(wildcard *.c) $(wildcard */*.c)
 TARGETS := $(SRC:.c=)
