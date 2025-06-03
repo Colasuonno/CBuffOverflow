@@ -4,3 +4,5 @@
 
 # Compiled file name
 /bin/*
+
+.gdb_history
