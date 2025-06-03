@@ -4,5 +4,6 @@
 
 # Compiled file name
 /bin/*
+/obj/*
 
 .gdb_history

